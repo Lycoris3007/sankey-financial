@@ -1,0 +1,92 @@
+/* 阿里巴巴普惠体字体定义 - Web版本（使用系统字体后备） */
+/* 为了减小文件大小和提高加载速度，使用系统字体作为后备方案 */
+
+/* 定义字体族，优先使用系统中的相似字体 */
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: local('PingFang SC'), 
+       local('Microsoft YaHei'), 
+       local('Hiragino Sans GB'), 
+       local('Source Han Sans CN'), 
+       local('Noto Sans CJK SC'), 
+       local('Helvetica Neue'), 
+       local('Arial');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: local('PingFang SC'), 
+       local('Microsoft YaHei'), 
+       local('Hiragino Sans GB'), 
+       local('Source Han Sans CN'), 
+       local('Noto Sans CJK SC'), 
+       local('Helvetica Neue'), 
+       local('Arial');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: local('PingFang SC'), 
+       local('Microsoft YaHei'), 
+       local('Hiragino Sans GB'), 
+       local('Source Han Sans CN'), 
+       local('Noto Sans CJK SC'), 
+       local('Helvetica Neue'), 
+       local('Arial');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: local('PingFang SC Medium'), 
+       local('Microsoft YaHei'), 
+       local('Hiragino Sans GB'), 
+       local('Source Han Sans CN Medium'), 
+       local('Noto Sans CJK SC Medium'), 
+       local('Helvetica Neue Medium'), 
+       local('Arial');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: local('PingFang SC Semibold'), 
+       local('Microsoft YaHei Bold'), 
+       local('Hiragino Sans GB'), 
+       local('Source Han Sans CN Bold'), 
+       local('Noto Sans CJK SC Bold'), 
+       local('Helvetica Neue Bold'), 
+       local('Arial Bold');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: local('PingFang SC Bold'), 
+       local('Microsoft YaHei Bold'), 
+       local('Hiragino Sans GB'), 
+       local('Source Han Sans CN Bold'), 
+       local('Noto Sans CJK SC Bold'), 
+       local('Helvetica Neue Bold'), 
+       local('Arial Bold');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 通用字体族定义 */
+.alibaba-font {
+  font-family: 'Alibaba PuHuiTi', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Noto Sans CJK SC', 'Helvetica Neue', Arial, sans-serif;
+}
