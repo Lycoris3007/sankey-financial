@@ -3191,15 +3191,153 @@ const getHistoricalData = (dataArray, currentIndex, periodsBack) => {
   return (historicalIndex < dataArray.length) ? dataArray[historicalIndex] : null;
 };
 
-// 获取公司简称的函数
+// 清理公司名称的辅助函数
+const cleanCompanyName = (name) => {
+  if (!name) return name;
+
+  // 特殊处理一些重要案例
+  const specialCases = {
+    'Robinhood Markets, Inc.': 'Robinhood',
+    'Robinhood Markets': 'Robinhood',
+    'Tesla, Inc.': 'Tesla',
+    'Apple Inc.': 'Apple',
+    'Microsoft Corporation': 'Microsoft',
+    'Alphabet Inc.': 'Alphabet',
+    'Amazon.com, Inc.': 'Amazon',
+    'Meta Platforms, Inc.': 'Meta',
+    'NVIDIA Corporation': 'NVIDIA',
+    'Netflix, Inc.': 'Netflix',
+    'JPMorgan Chase & Co.': 'JPMorgan',
+    'Bank of America Corporation': 'Bank of America',
+    'Wells Fargo & Company': 'Wells Fargo',
+    'The Goldman Sachs Group, Inc.': 'Goldman Sachs',
+    'Morgan Stanley': 'Morgan Stanley',
+    'American Express Company': 'American Express',
+    'The Procter & Gamble Company': 'Procter & Gamble',
+    'Johnson & Johnson': 'Johnson & Johnson',
+    'Johnson &amp; Johnson': 'Johnson & Johnson',  // HTML编码的&符号
+    'Johnson and Johnson': 'Johnson & Johnson',
+    'The Coca-Cola Company': 'Coca-Cola',
+    'The Home Depot, Inc.': 'Home Depot',
+    'The Walt Disney Company': 'Disney',
+    'McDonald\'s Corporation': 'McDonald\'s',
+    'FB Financial Corporation': 'FB Financial',
+    'First BanCorp.': 'First BanCorp',
+    'First Bancorp': 'First Bancorp',
+    'The Bank of New York Mellon Corporation': 'Bank of New York Mellon',
+    'Bank of New York Mellon Corp.': 'Bank of New York Mellon',
+    'BNY Mellon': 'Bank of New York Mellon',
+    'Telefonaktiebolaget LM Ericsson (publ)': 'Ericsson',
+    'Telefonaktiebolaget LM Ericsson': 'Ericsson',
+    'Ericsson': 'Ericsson'
+  };
+
+  // 检查特殊情况
+  for (const [fullName, shortName] of Object.entries(specialCases)) {
+    if (fullName.toLowerCase() === name.toLowerCase()) {
+      return shortName;
+    }
+  }
+
+  // 特殊保护：如果名称包含&符号，先检查是否是已知的公司名称
+  if (name.includes('&') || name.includes('&amp;')) {
+    // 标准化&符号
+    const normalizedName = name.replace(/&amp;/g, '&');
+
+    // 检查是否是Johnson & Johnson的变体
+    if (/johnson\s*&\s*johnson/i.test(normalizedName)) {
+      return 'Johnson & Johnson';
+    }
+
+    // 检查是否是Procter & Gamble的变体
+    if (/procter\s*&\s*gamble/i.test(normalizedName)) {
+      return 'Procter & Gamble';
+    }
+
+    // 对于其他包含&的公司名称，保持&符号
+    return normalizedName.replace(/,?\s+(Inc\.?|Corporation|Corp\.?|Company|Co\.?)$/i, '').trim();
+  }
+
+  // 移除开头的"The"
+  let cleaned = name.replace(/^The\s+/i, '');
+
+  // 移除常见的公司后缀（按优先级排序）
+  const suffixes = [
+    // 最常见的后缀
+    /,?\s+(Inc\.?|Corporation|Corp\.?|Company|Co\.?|Ltd\.?|Limited|LLC|L\.L\.C\.?)$/i,
+    // 国际公司后缀
+    /\s*\(publ\)$/i,  // 瑞典上市公司后缀
+    /,?\s+(N\.V\.?|S\.A\.?|A\.G\.?|GmbH|plc|PLC)$/i,  // 欧洲公司后缀
+    // 股票类别
+    /,?\s+Class\s+[A-Z]$/i,
+    // 业务类型
+    /,?\s+(Holdings?|Group|International|Global)$/i,
+    // 行业相关
+    /,?\s+(Technologies?|Technology|Tech|Systems?|Solutions?|Services?|Software)$/i,
+    /,?\s+(Markets?|Enterprises?|Industries?|Communications?|Networks?|Platforms?)$/i,
+    /,?\s+(Therapeutics?|Pharmaceuticals?|Pharma|Biosciences?|Biotechnology|Biotech)$/i,
+    /,?\s+(Energy|Resources?|Materials?|Chemicals?)$/i,
+    // 金融相关
+    /,?\s+(Financial|Finance|Capital|Investment|Management|Trust|REIT|Bank|Banking)$/i,
+    /,?\s+(Partners?|Associates?|Advisors?|Consulting)$/i,
+    // 地理标识
+    /,?\s+(America|American|USA|US|North America)$/i,
+    /,?\s+(Europe|European|Asia|Asian|Pacific)$/i
+  ];
+
+  // 应用后缀移除规则
+  for (const suffix of suffixes) {
+    cleaned = cleaned.replace(suffix, '');
+  }
+
+  // 特殊处理：保留重要的标识词
+  const preservePatterns = [
+    /Bank of New York Mellon/i,  // 特别保留"Bank of New York Mellon"
+    /Bank of [A-Za-z\s]+/i,      // 保留"Bank of America"等
+    /[A-Za-z\s]+ Bank$/i,        // 保留"Wells Fargo Bank"等
+    /[A-Za-z\s]+ Financial$/i    // 保留一些金融公司的"Financial"
+  ];
+
+  for (const pattern of preservePatterns) {
+    const match = name.match(pattern);
+    if (match) {
+      return match[0].trim();
+    }
+  }
+
+  return cleaned.trim();
+};
+
+// 获取公司简称的函数 - 优先使用Yahoo Finance API
 const getCompanyShortName = async (symbol, apiKey) => {
   try {
-    const url = `https://financialmodelingprep.com/api/v3/profile/${symbol}?apikey=${apiKey}`;
-    const response = await fetch(url);
-    if (response.ok) {
-      const data = await response.json();
-      if (data && data.length > 0 && data[0].companyName) {
-        return data[0].companyName;
+    // 首先尝试Yahoo Finance API获取简称
+    try {
+      const yahooUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=price`;
+      const yahooResponse = await fetch(yahooUrl);
+      if (yahooResponse.ok) {
+        const yahooData = await yahooResponse.json();
+        const shortName = yahooData.quoteSummary?.result?.[0]?.price?.shortName;
+        if (shortName && shortName !== symbol) {
+          const cleanedName = cleanCompanyName(shortName);
+          console.log(`Got short name from Yahoo Finance: ${shortName} -> ${cleanedName}`);
+          return cleanedName;
+        }
+      }
+    } catch (yahooError) {
+      console.log(`Yahoo Finance API failed for ${symbol}, trying FMP...`);
+    }
+
+    // 回退到FMP API
+    const fmpUrl = `https://financialmodelingprep.com/api/v3/profile/${symbol}?apikey=${apiKey}`;
+    const fmpResponse = await fetch(fmpUrl);
+    if (fmpResponse.ok) {
+      const fmpData = await fmpResponse.json();
+      if (fmpData && fmpData.length > 0 && fmpData[0].companyName) {
+        const fullName = fmpData[0].companyName;
+        const shortName = cleanCompanyName(fullName);
+        console.log(`Got company name from FMP: ${fullName} -> ${shortName}`);
+        return shortName;
       }
     }
   } catch (error) {
@@ -3213,7 +3351,7 @@ const getCompanyShortName = async (symbol, apiKey) => {
 const sanitizeInput = (input) => {
   if (typeof input !== 'string') return '';
   return input
-    .replace(/[<>'"&]/g, '') // 移除潜在的XSS字符
+    .replace(/[<>'"]/g, '') // 移除潜在的XSS字符，但保留&符号
     .trim()
     .substring(0, 100); // 限制长度
 };
