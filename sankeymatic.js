@@ -761,7 +761,7 @@ const msg = {
   areas: new Map([
     ['issue', { id: 'issue_messages', class: 'errormessage' }],
     ['difference', { id: 'imbalance_messages', class: 'differencemessage' }],
-    ['total', { id: 'totals_area', class: '' }],
+    ['total', { id: 'totals_area_bottom', class: '' }], // 修改为新的底部统计区域
     ['info', { id: 'info_messages', class: 'okmessage' }],
     ['console', { id: 'console_lines', class: '' }],
   ]),
@@ -812,6 +812,15 @@ const msg = {
           }
         }
       });
+
+    // 同时清空原来的totals_area以避免重复显示
+    const originalTotalsArea = el('totals_area');
+    if (originalTotalsArea) {
+      while (originalTotalsArea.firstChild) {
+        originalTotalsArea.removeChild(originalTotalsArea.firstChild);
+      }
+    }
+
     if (msg.consoleContainer) {
       msg.consoleContainer.style.display = 'none';
     }
@@ -1578,13 +1587,15 @@ function render_sankey(allNodes, allFlows, cfg, numberStyle) {
 
       // Will there be any highlights? If not, n.label.bg will be null:
       if (hlStyle.orig.fill_opacity > 0) {
+        // 增加背景框的边距，让它比标签范围更大
+        const extraPadding = 8; // 额外的边距像素
         n.label.bg = {
           dom_id: `${n.label.dom_id}_bg`, // label0_bg, label1_bg..
           offset: {
-            x: n.label.anchor === 'end' ? -pad.outer : -pad.inner,
-            y: -pad.top,
-            w: pad.inner + pad.outer,
-            h: pad.top + pad.bot,
+            x: n.label.anchor === 'end' ? -pad.outer - extraPadding : -pad.inner - extraPadding,
+            y: -pad.top - extraPadding,
+            w: pad.inner + pad.outer + (extraPadding * 2),
+            h: pad.top + pad.bot + (extraPadding * 2),
           },
           ...hlStyle.orig,
         };
@@ -3180,6 +3191,24 @@ const getHistoricalData = (dataArray, currentIndex, periodsBack) => {
   return (historicalIndex < dataArray.length) ? dataArray[historicalIndex] : null;
 };
 
+// 获取公司简称的函数
+const getCompanyShortName = async (symbol, apiKey) => {
+  try {
+    const url = `https://financialmodelingprep.com/api/v3/profile/${symbol}?apikey=${apiKey}`;
+    const response = await fetch(url);
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.length > 0 && data[0].companyName) {
+        return data[0].companyName;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching company name:', error);
+  }
+  // 如果获取失败，返回原始symbol
+  return symbol;
+};
+
 // 输入清理函数，防止XSS
 const sanitizeInput = (input) => {
   if (typeof input !== 'string') return '';
@@ -3218,9 +3247,17 @@ glob.updatePeriodSelection = async () => {
   const period = elV('api_period');
   const apiKey = elV('api_key').trim();
   const specificPeriodSelect = el('api_specific_period');
+  const changeComparisonGroup = el('change_comparison_group');
 
   // 清空现有选项
   specificPeriodSelect.innerHTML = '<option value="latest">最新期间</option>';
+
+  // 根据期间类型显示/隐藏变化计算方式选项
+  if (period === 'quarter') {
+    changeComparisonGroup.style.display = 'block';
+  } else {
+    changeComparisonGroup.style.display = 'none';
+  }
 
   if (!symbol || !apiKey) {
     return;
@@ -3277,6 +3314,7 @@ glob.fetchFinancialData = async () => {
   const period = elV('api_period');
   const apiKey = elV('api_key').trim();
   const specificPeriodIndex = parseInt(elV('api_specific_period')) || 0;
+  const changeComparison = elV('change_comparison') || 'yoy'; // 默认为同比
 
   if (!symbol) {
     el('api_error').textContent = '请输入股票代码';
@@ -3295,6 +3333,9 @@ glob.fetchFinancialData = async () => {
   el('api_error').style.display = 'none';
 
   try {
+    // 获取公司简称
+    const companyName = await getCompanyShortName(symbol, apiKey);
+
     // 获取收入报表数据
     const incomeUrl = `https://financialmodelingprep.com/stable/income-statement?symbol=${symbol}&period=${period}&apikey=${apiKey}`;
     const incomeResponse = await fetch(incomeUrl);
@@ -3322,8 +3363,13 @@ glob.fetchFinancialData = async () => {
           segmentData = specificPeriodIndex === 0 || elV('api_specific_period') === 'latest'
             ? segmentJson[0]
             : segmentJson[specificPeriodIndex]; // 取对应期间的分段数据
-          // 取前期分段数据（同比：季度+4，年度+1）
-          const periodsBack = period === 'quarter' ? 4 : 1;
+          // 根据用户选择计算periodsBack
+          let periodsBack;
+          if (period === 'quarter') {
+            periodsBack = changeComparison === 'qoq' ? 1 : 4; // Q/Q环比=1，Y/Y同比=4
+          } else {
+            periodsBack = 1; // 年度只能是同比
+          }
           previousSegmentData = getHistoricalData(segmentJson, specificPeriodIndex, periodsBack);
         }
       }
@@ -3333,12 +3379,18 @@ glob.fetchFinancialData = async () => {
     const selectedIncomeData = specificPeriodIndex === 0 || elV('api_specific_period') === 'latest'
       ? incomeData[0]
       : incomeData[specificPeriodIndex];
-    // 取前期数据（同比：季度+4，年度+1）
-    const periodsBack = period === 'quarter' ? 4 : 1;
+
+    // 根据用户选择计算periodsBack
+    let periodsBack;
+    if (period === 'quarter') {
+      periodsBack = changeComparison === 'qoq' ? 1 : 4; // Q/Q环比=1，Y/Y同比=4
+    } else {
+      periodsBack = 1; // 年度只能是同比
+    }
     const previousIncomeData = getHistoricalData(incomeData, specificPeriodIndex, periodsBack);
 
-    // 转换为桑基图格式
-    const sankeyData = convertFinancialDataToSankeyFormat(selectedIncomeData, segmentData, previousIncomeData, period, previousSegmentData);
+    // 转换为桑基图格式，传递计算方式信息和公司名称
+    const sankeyData = convertFinancialDataToSankeyFormat(selectedIncomeData, segmentData, previousIncomeData, period, previousSegmentData, changeComparison, companyName);
 
     // 显示预览对话框
     el('generated_data_preview').value = sankeyData;
@@ -3354,7 +3406,7 @@ glob.fetchFinancialData = async () => {
   }
 };
 
-glob.convertFinancialDataToSankeyFormat = (data, segmentData = null, previousData = null, period = 'quarter', previousSegmentData = null) => {
+glob.convertFinancialDataToSankeyFormat = (data, segmentData = null, previousData = null, period = 'quarter', previousSegmentData = null, changeComparison = 'yoy', companyName = null) => {
   const {
     symbol,
     fiscalYear,
@@ -3375,7 +3427,17 @@ glob.convertFinancialDataToSankeyFormat = (data, segmentData = null, previousDat
   } = data;
 
   // 生成标题（清理输入以防止XSS）
-  const title = `${sanitizeInput(symbol)} ${sanitizeInput(fiscalYear)} ${sanitizeInput(dataPeriod)} Income Statement`;
+  // 使用公司名称替代ticker，并调整格式
+  const displayName = companyName ? sanitizeInput(companyName) : sanitizeInput(symbol);
+  let title;
+
+  if (period === 'quarter') {
+    // 季度格式：NVIDIA Q1 FY2026 Income Statement
+    title = `${displayName} ${sanitizeInput(dataPeriod)} FY${sanitizeInput(fiscalYear)} Income Statement`;
+  } else {
+    // 年度格式：NVIDIA FY2025 Income Statement
+    title = `${displayName} FY${sanitizeInput(fiscalYear)} Income Statement`;
+  }
 
   // 将数值转换为百万美元单位
   const MILLION_DIVISOR = 1000000; // 使用常量而不是魔法数字
@@ -3444,8 +3506,8 @@ glob.convertFinancialDataToSankeyFormat = (data, segmentData = null, previousDat
     return Number.isFinite(change) ? Math.round(change) : null;
   };
 
-  // changes后缀统一为Y/Y
-  const changeSuffix = 'Y/Y';
+  // 根据计算方式设置changes后缀
+  const changeSuffix = (period === 'quarter' && changeComparison === 'qoq') ? 'Q/Q' : 'Y/Y';
 
   const costOfRevenueM = toMillions(costOfRevenue);
   const grossProfitM = toMillions(grossProfit);
