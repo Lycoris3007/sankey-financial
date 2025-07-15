@@ -3191,153 +3191,23 @@ const getHistoricalData = (dataArray, currentIndex, periodsBack) => {
   return (historicalIndex < dataArray.length) ? dataArray[historicalIndex] : null;
 };
 
-// 清理公司名称的辅助函数
-const cleanCompanyName = (name) => {
-  if (!name) return name;
-
-  // 特殊处理一些重要案例
-  const specialCases = {
-    'Robinhood Markets, Inc.': 'Robinhood',
-    'Robinhood Markets': 'Robinhood',
-    'Tesla, Inc.': 'Tesla',
-    'Apple Inc.': 'Apple',
-    'Microsoft Corporation': 'Microsoft',
-    'Alphabet Inc.': 'Alphabet',
-    'Amazon.com, Inc.': 'Amazon',
-    'Meta Platforms, Inc.': 'Meta',
-    'NVIDIA Corporation': 'NVIDIA',
-    'Netflix, Inc.': 'Netflix',
-    'JPMorgan Chase & Co.': 'JPMorgan',
-    'Bank of America Corporation': 'Bank of America',
-    'Wells Fargo & Company': 'Wells Fargo',
-    'The Goldman Sachs Group, Inc.': 'Goldman Sachs',
-    'Morgan Stanley': 'Morgan Stanley',
-    'American Express Company': 'American Express',
-    'The Procter & Gamble Company': 'Procter & Gamble',
-    'Johnson & Johnson': 'Johnson & Johnson',
-    'Johnson &amp; Johnson': 'Johnson & Johnson',  // HTML编码的&符号
-    'Johnson and Johnson': 'Johnson & Johnson',
-    'The Coca-Cola Company': 'Coca-Cola',
-    'The Home Depot, Inc.': 'Home Depot',
-    'The Walt Disney Company': 'Disney',
-    'McDonald\'s Corporation': 'McDonald\'s',
-    'FB Financial Corporation': 'FB Financial',
-    'First BanCorp.': 'First BanCorp',
-    'First Bancorp': 'First Bancorp',
-    'The Bank of New York Mellon Corporation': 'Bank of New York Mellon',
-    'Bank of New York Mellon Corp.': 'Bank of New York Mellon',
-    'BNY Mellon': 'Bank of New York Mellon',
-    'Telefonaktiebolaget LM Ericsson (publ)': 'Ericsson',
-    'Telefonaktiebolaget LM Ericsson': 'Ericsson',
-    'Ericsson': 'Ericsson'
-  };
-
-  // 检查特殊情况
-  for (const [fullName, shortName] of Object.entries(specialCases)) {
-    if (fullName.toLowerCase() === name.toLowerCase()) {
-      return shortName;
-    }
-  }
-
-  // 特殊保护：如果名称包含&符号，先检查是否是已知的公司名称
-  if (name.includes('&') || name.includes('&amp;')) {
-    // 标准化&符号
-    const normalizedName = name.replace(/&amp;/g, '&');
-
-    // 检查是否是Johnson & Johnson的变体
-    if (/johnson\s*&\s*johnson/i.test(normalizedName)) {
-      return 'Johnson & Johnson';
-    }
-
-    // 检查是否是Procter & Gamble的变体
-    if (/procter\s*&\s*gamble/i.test(normalizedName)) {
-      return 'Procter & Gamble';
-    }
-
-    // 对于其他包含&的公司名称，保持&符号
-    return normalizedName.replace(/,?\s+(Inc\.?|Corporation|Corp\.?|Company|Co\.?)$/i, '').trim();
-  }
-
-  // 移除开头的"The"
-  let cleaned = name.replace(/^The\s+/i, '');
-
-  // 移除常见的公司后缀（按优先级排序）
-  const suffixes = [
-    // 最常见的后缀
-    /,?\s+(Inc\.?|Corporation|Corp\.?|Company|Co\.?|Ltd\.?|Limited|LLC|L\.L\.C\.?)$/i,
-    // 国际公司后缀
-    /\s*\(publ\)$/i,  // 瑞典上市公司后缀
-    /,?\s+(N\.V\.?|S\.A\.?|A\.G\.?|GmbH|plc|PLC)$/i,  // 欧洲公司后缀
-    // 股票类别
-    /,?\s+Class\s+[A-Z]$/i,
-    // 业务类型
-    /,?\s+(Holdings?|Group|International|Global)$/i,
-    // 行业相关
-    /,?\s+(Technologies?|Technology|Tech|Systems?|Solutions?|Services?|Software)$/i,
-    /,?\s+(Markets?|Enterprises?|Industries?|Communications?|Networks?|Platforms?)$/i,
-    /,?\s+(Therapeutics?|Pharmaceuticals?|Pharma|Biosciences?|Biotechnology|Biotech)$/i,
-    /,?\s+(Energy|Resources?|Materials?|Chemicals?)$/i,
-    // 金融相关
-    /,?\s+(Financial|Finance|Capital|Investment|Management|Trust|REIT|Bank|Banking)$/i,
-    /,?\s+(Partners?|Associates?|Advisors?|Consulting)$/i,
-    // 地理标识
-    /,?\s+(America|American|USA|US|North America)$/i,
-    /,?\s+(Europe|European|Asia|Asian|Pacific)$/i
-  ];
-
-  // 应用后缀移除规则
-  for (const suffix of suffixes) {
-    cleaned = cleaned.replace(suffix, '');
-  }
-
-  // 特殊处理：保留重要的标识词
-  const preservePatterns = [
-    /Bank of New York Mellon/i,  // 特别保留"Bank of New York Mellon"
-    /Bank of [A-Za-z\s]+/i,      // 保留"Bank of America"等
-    /[A-Za-z\s]+ Bank$/i,        // 保留"Wells Fargo Bank"等
-    /[A-Za-z\s]+ Financial$/i    // 保留一些金融公司的"Financial"
-  ];
-
-  for (const pattern of preservePatterns) {
-    const match = name.match(pattern);
-    if (match) {
-      return match[0].trim();
-    }
-  }
-
-  return cleaned.trim();
-};
-
-// 获取公司简称的函数 - 优先使用Yahoo Finance API
-const getCompanyShortName = async (symbol, apiKey) => {
+// 获取公司简称的函数
+const getCompanyShortName = async (symbol) => {
   try {
-    // 首先尝试Yahoo Finance API获取简称
-    try {
-      const yahooUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=price`;
-      const yahooResponse = await fetch(yahooUrl);
-      if (yahooResponse.ok) {
-        const yahooData = await yahooResponse.json();
-        const shortName = yahooData.quoteSummary?.result?.[0]?.price?.shortName;
-        if (shortName && shortName !== symbol) {
-          const cleanedName = cleanCompanyName(shortName);
-          console.log(`Got short name from Yahoo Finance: ${shortName} -> ${cleanedName}`);
-          return cleanedName;
-        }
+    const url = `https://yfapi.net/v6/finance/quote?region=US&lang=en&symbols=${symbol}`;
+    const response = await fetch(url, {
+      headers: {
+        'accept': 'application/json',
+        'X-API-KEY': '5OVZb8uI6z6ObTw0Gvjzx1tzaI1tTuO03ePZEapI'
       }
-    } catch (yahooError) {
-      console.log(`Yahoo Finance API failed for ${symbol}, trying FMP...`);
-    }
+    });
 
-    // 回退到FMP API
-    const fmpUrl = `https://financialmodelingprep.com/api/v3/profile/${symbol}?apikey=${apiKey}`;
-    const fmpResponse = await fetch(fmpUrl);
-    if (fmpResponse.ok) {
-      const fmpData = await fmpResponse.json();
-      if (fmpData && fmpData.length > 0 && fmpData[0].companyName) {
-        const fullName = fmpData[0].companyName;
-        const shortName = cleanCompanyName(fullName);
-        console.log(`Got company name from FMP: ${fullName} -> ${shortName}`);
-        return shortName;
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.quoteResponse && data.quoteResponse.result && data.quoteResponse.result.length > 0) {
+        const quote = data.quoteResponse.result[0];
+        // 优先使用displayName，如果没有则使用shortName
+        return quote.displayName || quote.shortName || symbol;
       }
     }
   } catch (error) {
@@ -3472,7 +3342,7 @@ glob.fetchFinancialData = async () => {
 
   try {
     // 获取公司简称
-    const companyName = await getCompanyShortName(symbol, apiKey);
+    const companyName = await getCompanyShortName(symbol);
 
     // 获取收入报表数据
     const incomeUrl = `https://financialmodelingprep.com/stable/income-statement?symbol=${symbol}&period=${period}&apikey=${apiKey}`;
@@ -3584,7 +3454,26 @@ glob.convertFinancialDataToSankeyFormat = (data, segmentData = null, previousDat
     return Math.round(numValue / MILLION_DIVISOR);
   };
 
-  // 为长节点名称添加换行的函数
+  // 金融术语缩写映射
+  const financialAbbreviations = {
+    'securities': 'sec.',
+    'purchased': 'purch.',
+    'agreements': 'agrmnts',
+    'borrowed': 'borr.',
+    'Federal funds': 'Fed funds',
+    'under agreements to resell': 'under resale agrmnts',
+    'research and development': 'R&D',
+    'general and administrative': 'G&A',
+    'selling and marketing': 'S&M',
+    'income before tax': 'pre-tax income',
+    'income tax expense': 'tax expense',
+    'total other income': 'other income',
+    'cost of revenue': 'COGS',
+    'operating income': 'EBIT',
+    'net income': 'net income'
+  };
+
+  // 为长节点名称添加换行和缩写的函数
   const formatNodeName = (name, isSegment = false) => {
     let processedName = name;
 
@@ -3597,28 +3486,68 @@ glob.convertFinancialDataToSankeyFormat = (data, segmentData = null, previousDat
       processedName = processedName.replace(/\s+(Revenues?)\s*$/i, '');
     }
 
-    // 通用的长名称处理逻辑
-    // 如果名称长度超过25个字符，尝试智能换行
-    if (processedName.length > 25) {
-      // 寻找合适的换行位置
-      const words = processedName.split(' ');
-      if (words.length >= 2) {
-        // 尝试在中间位置换行
-        const midPoint = Math.ceil(words.length / 2);
-        const firstPart = words.slice(0, midPoint).join(' ');
-        const secondPart = words.slice(midPoint).join(' ');
+    // 特殊处理一些常见的超长名称模式
+    const specialPatterns = {
+      'Federal funds sold & securities borrowed or purchased under agreements to resell': 'Fed funds sold\\n& sec. borr. or purch.\\nunder resale agrmnts',
+      'securities borrowed or purchased under agreements to resell': 'sec. borr. or purch.\\nunder resale agrmnts'
+    };
 
-        // 如果第一部分不会太短或太长，就在这里换行
-        if (firstPart.length >= 8 && firstPart.length <= 20) {
-          return `${firstPart}\\n${secondPart}`;
+    // 检查是否匹配特殊模式
+    if (specialPatterns[processedName]) {
+      return specialPatterns[processedName];
+    }
+
+    // 应用金融术语缩写（对于超长名称）
+    if (processedName.length > 35) {
+      Object.entries(financialAbbreviations).forEach(([full, abbrev]) => {
+        const regex = new RegExp(full, 'gi');
+        processedName = processedName.replace(regex, abbrev);
+      });
+    }
+
+    // 多级换行处理函数
+    const applyMultiLineBreaks = (text, maxLineLength = 22) => {
+      const words = text.split(' ');
+      const lines = [];
+      let currentLine = '';
+
+      for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+
+        if (testLine.length <= maxLineLength) {
+          currentLine = testLine;
+        } else {
+          if (currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            // 单个词太长，强制换行
+            lines.push(word);
+          }
         }
       }
+
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+
+      return lines.join('\\n');
+    };
+
+    // 通用的长名称处理逻辑
+    if (processedName.length > 25) {
+      // 首先尝试智能换行位置
 
       // 如果包含逗号，尝试在逗号后换行
       if (processedName.includes(', ')) {
         const parts = processedName.split(', ');
         if (parts.length === 2) {
-          return `${parts[0]},\\n${parts[1]}`;
+          const result = `${parts[0]},\\n${parts[1]}`;
+          // 检查第二行是否还是太长
+          if (parts[1].length > 22) {
+            return `${parts[0]},\\n${applyMultiLineBreaks(parts[1])}`;
+          }
+          return result;
         }
       }
 
@@ -3626,12 +3555,20 @@ glob.convertFinancialDataToSankeyFormat = (data, segmentData = null, previousDat
       if (processedName.includes(' & ')) {
         const parts = processedName.split(' & ');
         if (parts.length === 2 && parts[0].length >= 8) {
-          return `${parts[0]}\\n& ${parts[1]}`;
+          const secondPart = `& ${parts[1]}`;
+          // 检查第二行是否还是太长
+          if (secondPart.length > 22) {
+            return `${parts[0]}\\n${applyMultiLineBreaks(secondPart)}`;
+          }
+          return `${parts[0]}\\n${secondPart}`;
         }
       }
+
+      // 如果没有找到特殊分割点，使用多级换行
+      return applyMultiLineBreaks(processedName);
     }
 
-    // 如果没有找到合适的换行位置，返回处理后的名称
+    // 如果名称不长，返回处理后的名称
     return processedName;
   };
 
@@ -3959,8 +3896,8 @@ glob.convertFinancialDataToSankeyFormat = (data, segmentData = null, previousDat
   sankeyText += `value_suffix 'M'\n`;
   sankeyText += `size_w 1200\n`;   // 增加画布宽度以容纳所有内容
   sankeyText += `size_h 600\n`;
-  sankeyText += `margin_l 150\n`;  // 左边距设为150
-  sankeyText += `margin_r 200\n`;  // 右边距设为200
+  sankeyText += `margin_l 160\n`;  // 左边距设为160
+  sankeyText += `margin_r 160\n`;  // 右边距设为160
   sankeyText += `margin_t 80\n`;   // 顶部边距设为80
   sankeyText += `margin_b 80\n`;   // 底部边距设为80
 
