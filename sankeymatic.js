@@ -3191,6 +3191,17 @@ const getHistoricalData = (dataArray, currentIndex, periodsBack) => {
   return (historicalIndex < dataArray.length) ? dataArray[historicalIndex] : null;
 };
 
+// 获取上一季度的函数
+const getPreviousQuarter = (currentQuarter) => {
+  const quarterMap = {
+    'Q1': 'Q4',
+    'Q2': 'Q1',
+    'Q3': 'Q2',
+    'Q4': 'Q3'
+  };
+  return quarterMap[currentQuarter] || currentQuarter;
+};
+
 // 获取公司简称的函数
 const getCompanyShortName = async (symbol) => {
   try {
@@ -3356,6 +3367,11 @@ glob.fetchFinancialData = async () => {
       throw new Error('未找到收入报表数据');
     }
 
+    // 根据用户选择获取对应期间的财报数据
+    const selectedIncomeData = specificPeriodIndex === 0 || elV('api_specific_period') === 'latest'
+      ? incomeData[0]
+      : incomeData[specificPeriodIndex];
+
     // 获取收入分段数据（如果用户选择了的话）
     let segmentData = null;
     let previousSegmentData = null;
@@ -3368,25 +3384,68 @@ glob.fetchFinancialData = async () => {
       if (segmentResponse.ok) {
         const segmentJson = await segmentResponse.json();
         if (segmentJson && segmentJson.length > 0) {
-          segmentData = specificPeriodIndex === 0 || elV('api_specific_period') === 'latest'
-            ? segmentJson[0]
-            : segmentJson[specificPeriodIndex]; // 取对应期间的分段数据
-          // 根据用户选择计算periodsBack
-          let periodsBack;
-          if (period === 'quarter') {
-            periodsBack = changeComparison === 'qoq' ? 1 : 4; // Q/Q环比=1，Y/Y同比=4
+
+          // 查找与income statement同一时期的segmentation数据
+          const matchingSegmentData = segmentJson.find(segment => {
+            // 检查fiscalYear和period是否匹配
+            const fiscalYearMatch = segment.fiscalYear === selectedIncomeData.fiscalYear;
+            const periodMatch = period === 'annual' || segment.period === selectedIncomeData.period;
+            return fiscalYearMatch && periodMatch;
+          });
+
+          if (matchingSegmentData) {
+            segmentData = matchingSegmentData;
+            console.info(`Found matching segmentation data for ${period === 'annual' ? `FY${selectedIncomeData.fiscalYear}` : `${selectedIncomeData.period} FY${selectedIncomeData.fiscalYear}`}`);
+
+            // 查找历史对比数据，也需要确保时期匹配
+            let targetFiscalYear, targetPeriod;
+
+            if (period === 'quarter' && changeComparison === 'qoq') {
+              // 环比：上一季度
+              targetPeriod = getPreviousQuarter(selectedIncomeData.period);
+              // 如果当前是Q1，上一季度是上一财年的Q4
+              targetFiscalYear = selectedIncomeData.period === 'Q1'
+                ? selectedIncomeData.fiscalYear - 1
+                : selectedIncomeData.fiscalYear;
+            } else {
+              // 同比：上一财年的同一季度/年度
+              targetFiscalYear = selectedIncomeData.fiscalYear - 1;
+              targetPeriod = selectedIncomeData.period;
+            }
+
+            previousSegmentData = segmentJson.find(segment => {
+              const fiscalYearMatch = segment.fiscalYear === targetFiscalYear;
+              const periodMatch = period === 'annual' || segment.period === targetPeriod;
+              return fiscalYearMatch && periodMatch;
+            });
+
+            if (previousSegmentData) {
+              const comparisonPeriodLabel = period === 'annual'
+                ? `FY${targetFiscalYear}`
+                : `${targetPeriod} FY${targetFiscalYear}`;
+              console.info(`Found matching comparison segmentation data for ${comparisonPeriodLabel}`);
+            } else {
+              const comparisonPeriodLabel = period === 'annual'
+                ? `FY${targetFiscalYear}`
+                : `${targetPeriod} FY${targetFiscalYear}`;
+              console.warn(`No comparison segmentation data found for ${comparisonPeriodLabel}`);
+            }
           } else {
-            periodsBack = 1; // 年度只能是同比
+            // 如果没有找到匹配的segmentation数据，显示警告但不使用错误时期的数据
+            const periodLabel = period === 'annual'
+              ? `FY${selectedIncomeData.fiscalYear}`
+              : `${selectedIncomeData.period} FY${selectedIncomeData.fiscalYear}`;
+            console.warn(`No segmentation data found for ${periodLabel}. Skipping segmentation to avoid period mismatch.`);
+
+            // 可选：显示用户友好的提示信息
+            const availablePeriods = segmentJson.map(s =>
+              period === 'annual' ? `FY${s.fiscalYear}` : `${s.period} FY${s.fiscalYear}`
+            ).join(', ');
+            console.info(`Available segmentation periods: ${availablePeriods}`);
           }
-          previousSegmentData = getHistoricalData(segmentJson, specificPeriodIndex, periodsBack);
         }
       }
     }
-
-    // 根据用户选择获取对应期间的财报数据
-    const selectedIncomeData = specificPeriodIndex === 0 || elV('api_specific_period') === 'latest'
-      ? incomeData[0]
-      : incomeData[specificPeriodIndex];
 
     // 根据用户选择计算periodsBack
     let periodsBack;

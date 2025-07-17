@@ -18,6 +18,7 @@
 - Automatically fetch income statement and revenue segmentation data
 - Support for both annual and quarterly data
 - Historical period selection with automatic change calculation
+- **Period Matching**: Ensures income statement and segmentation data are from the same period
 
 ### 2. **Financial Flow Logic**
 - Accurate representation of financial statement relationships
@@ -233,6 +234,27 @@ The API supports thousands of companies. Popular examples:
 **"Rate Limit Exceeded" Error:**
 - Wait a few minutes before trying again
 - Consider upgrading to a paid plan for higher limits
+
+## 📅 Period Matching Feature
+
+The application includes intelligent period matching to ensure data consistency:
+
+**Problem Solved:**
+- Prevents mixing data from different periods (e.g., Q2 income statement with Q1 segmentation data)
+- Ensures accurate financial analysis and comparisons
+
+**How it Works:**
+1. **Exact Period Matching**: Only uses segmentation data that matches the exact fiscal year and period of the income statement
+2. **Smart Historical Comparison**: For change calculations, finds the correct comparison period:
+   - **Quarter-over-Quarter (Q/Q)**: Q2 → Q1, Q1 → Q4 (previous fiscal year)
+   - **Year-over-Year (Y/Y)**: Q2 2025 → Q2 2024, FY2025 → FY2024
+3. **Graceful Handling**: If no matching segmentation data is found, displays income statement only (no mixed periods)
+
+**User Benefits:**
+- ✅ Data integrity guaranteed
+- ✅ Accurate period comparisons
+- ✅ Clear console logging for transparency
+- ✅ No misleading mixed-period analysis
 
 ## 🚀 Getting Started
 
