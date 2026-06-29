@@ -2048,10 +2048,10 @@ function render_sankey(allNodes, allFlows, cfg, numberStyle) {
     .attr('fill', cfg.labels_color);
 
   if (cfg.meta_mentionsankeymatic) {
-    const logoWidth = 170;
+    const logoWidth = 220;
     const logoHeight = Math.round(logoWidth * 129 / 545);
     const logoX = cfg.size_w / 2 - graph.final_margin_l - logoWidth / 2;
-    const logoY = graph.h + cfg.margin_b - logoHeight + 6;
+    const logoY = graph.h + cfg.margin_b - logoHeight - 8;
     diagLabels.append('image')
       .attr('id', 'goai-logo')
       .attr('href', 'i/goai-logo.png')
